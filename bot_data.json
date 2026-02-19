@@ -1,0 +1,52 @@
+{
+  "admins": [
+    1070744113
+  ],
+  "suggestions": {
+    "d4ae590b-bb7b-4e23-8adf-bf40b4beb05e": {
+      "id": "d4ae590b-bb7b-4e23-8adf-bf40b4beb05e",
+      "user_id": 7229194724,
+      "user_info": "@Zemelka499",
+      "message_text": "SELL DOGEUSDT\nВероятность: 0.98\nВход: 0.2313\nSL: 0.2317\nTP: 0.2305\nОснование: подтв=-2, ADX=22.0, RSI=40.9, MACD_hist=-0.0000, basis=-0.039%",
+      "forwarded_messages_info": [
+        {
+          "message_id": 132,
+          "chat_id": 7229194724,
+          "chat_title": null,
+          "date": "2026-02-19T03:06:21+00:00"
+        }
+      ],
+      "is_media_group": false,
+      "selected_dates": [
+        "19.02"
+      ],
+      "selected_times": [
+        "08:00"
+      ],
+      "post_count": 1,
+      "source": "cryptoscreener",
+      "created_at": "19.02.2026 05:06"
+    }
+  },
+  "scheduled_messages": {
+    "d0949f36-e32e-4255-9b62-ae2599b0d769": {
+      "id": "d0949f36-e32e-4255-9b62-ae2599b0d769",
+      "user_id": 1070744113,
+      "forwarded_messages_info": [
+        {
+          "message_id": 127,
+          "chat_id": 1070744113,
+          "chat_title": null,
+          "date": "2026-02-19T02:16:41+00:00"
+        }
+      ],
+      "is_media_group": false,
+      "date": "2026-02-19",
+      "time": "07:00",
+      "datetime": "2026-02-19T07:00:00+03:00",
+      "chat_id": -5149803300,
+      "source": "Сигналы криптовалют Signal Trade Crypto",
+      "created_at": "2026-02-19T04:16:49.514943"
+    }
+  }
+}
