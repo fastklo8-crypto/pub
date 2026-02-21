@@ -196,58 +196,165 @@ class PostScheduler:
                     pass
                 return
             
-            post_date_str = message_data.get('date')
-            post_time = message_data.get('time')
-            
             # Проверяем, нужно ли отправить сообщение сегодня
             today = datetime.now().date()
-            if post_date_str:
+            post_date = message_data.get('date')
+            
+            if post_date:
                 try:
-                    if isinstance(post_date_str, str):
-                        post_date = datetime.fromisoformat(post_date_str).date()
+                    if isinstance(post_date, str):
+                        post_date_obj = datetime.fromisoformat(post_date).date()
                     else:
-                        post_date = post_date_str
+                        post_date_obj = post_date
                     
-                    if post_date != today:
-                        logger.info(f"Пропускаем пост на дату {post_date}, сегодня {today}")
+                    if post_date_obj != today:
+                        logger.info(f"Пропускаем пост на дату {post_date_obj}, сегодня {today}")
                         return
                 except Exception as e:
                     logger.error(f"Ошибка при парсинге даты: {e}")
             
+            post_time = message_data.get('time', '')
+            
             # Отправляем все сообщения
+            successful_sends = 0
             for i, msg_info in enumerate(forwarded_messages_info):
                 try:
-                    logger.info(f"Отправка репоста {i+1}/{len(forwarded_messages_info)}: из чата {msg_info['chat_id']}, сообщение {msg_info['message_id']}")
+                    from_chat_id = msg_info.get('chat_id')
+                    message_id = msg_info.get('message_id')
                     
+                    if not from_chat_id or not message_id:
+                        logger.error(f"Неполная информация о сообщении: {msg_info}")
+                        continue
+                    
+                    logger.info(f"Отправка репоста {i+1}/{len(forwarded_messages_info)}: из чата {from_chat_id}, сообщение {message_id}")
+                    
+                    # Пробуем отправить репост
                     await self.send_with_retry(
                         bot,
                         bot.forward_message,
                         chat_id=chat_id,
-                        from_chat_id=msg_info['chat_id'],
-                        message_id=msg_info['message_id']
+                        from_chat_id=from_chat_id,
+                        message_id=message_id
                     )
+                    
+                    successful_sends += 1
+                    logger.info(f"Репост {i+1} успешно отправлен")
+                    
                     # Небольшая задержка между сообщениями в группе
-                    await asyncio.sleep(1)
+                    if i < len(forwarded_messages_info) - 1:
+                        await asyncio.sleep(1)
+                        
                 except Exception as e:
                     logger.error(f"Ошибка при отправке репоста {i+1}: {e}")
+                    
+                    # Пробуем альтернативный метод - копирование сообщения
+                    try:
+                        logger.info(f"Пробуем скопировать сообщение {i+1} вместо репоста")
+                        
+                        # Получаем оригинальное сообщение
+                        chat = await bot.get_chat(from_chat_id)
+                        
+                        # Отправляем как копию (без указания авторства)
+                        await self.send_with_retry(
+                            bot,
+                            bot.copy_message,
+                            chat_id=chat_id,
+                            from_chat_id=from_chat_id,
+                            message_id=message_id
+                        )
+                        
+                        successful_sends += 1
+                        logger.info(f"Копия сообщения {i+1} успешно отправлена")
+                    except Exception as copy_error:
+                        logger.error(f"Не удалось скопировать сообщение {i+1}: {copy_error}")
             
-            logger.info(f"{'Медиа-группа' if len(forwarded_messages_info) > 1 else 'Сообщение'} из {len(forwarded_messages_info)} сообщений отправлена в чат {chat_id}")
-            
-            # Уведомляем пользователя
+            # Уведомляем пользователя о результате
             try:
-                media_text = " (медиа-группа)" if len(forwarded_messages_info) > 1 else ""
-                await self.send_with_retry(
-                    bot,
-                    bot.send_message,
-                    chat_id=user_id,
-                    text=f"✅ Ваш пост{media_text} был опубликован {today.strftime('%d.%m.%Y')} в {post_time}"
-                )
+                if successful_sends == len(forwarded_messages_info):
+                    # Все сообщения отправлены успешно
+                    media_text = " (медиа-группа)" if len(forwarded_messages_info) > 1 else ""
+                    await self.send_with_retry(
+                        bot,
+                        bot.send_message,
+                        chat_id=user_id,
+                        text=f"✅ Ваш пост{media_text} был опубликован {today.strftime('%d.%m.%Y')} в {post_time}"
+                    )
+                elif successful_sends > 0:
+                    # Отправлена только часть сообщений
+                    await self.send_with_retry(
+                        bot,
+                        bot.send_message,
+                        chat_id=user_id,
+                        text=f"⚠️ Ваш пост был опубликован частично ({successful_sends}/{len(forwarded_messages_info)} сообщений) {today.strftime('%d.%m.%Y')} в {post_time}\n"
+                             f"Возможно, у бота нет доступа к исходным сообщениям."
+                    )
+                else:
+                    # Ни одно сообщение не отправлено
+                    await self.send_with_retry(
+                        bot,
+                        bot.send_message,
+                        chat_id=user_id,
+                        text=f"❌ Не удалось опубликовать ваш пост {today.strftime('%d.%m.%Y')} в {post_time}\n"
+                             f"Проверьте, что у бота есть доступ к исходным сообщениям."
+                    )
             except Exception as e:
                 logger.error(f"Не удалось уведомить пользователя: {e}")
             
+            logger.info(f"Результат отправки: {successful_sends}/{len(forwarded_messages_info)} сообщений доставлено")
+            
         except Exception as e:
             logger.error(f"Критическая ошибка при отправке сообщения: {e}")
-
+async def restore_scheduled_jobs(app: Application):
+    """Восстановление запланированных заданий после перезапуска"""
+    logger.info("Восстановление запланированных заданий...")
+    
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    now = datetime.now(moscow_tz)
+    
+    restored_count = 0
+    for post_id, post_data in scheduled_messages.items():
+        try:
+            # Получаем datetime из сохраненных данных
+            if 'datetime' in post_data:
+                if isinstance(post_data['datetime'], str):
+                    scheduled_datetime = datetime.fromisoformat(post_data['datetime'])
+                else:
+                    scheduled_datetime = post_data['datetime']
+                
+                # Проверяем, что время еще не прошло
+                if scheduled_datetime > now:
+                    # Добавляем bot в post_data
+                    post_data['bot'] = app.bot
+                    
+                    # Проверяем доступность исходных сообщений
+                    forwarded_info = post_data.get('forwarded_messages_info', [])
+                    if forwarded_info:
+                        first_msg = forwarded_info[0]
+                        try:
+                            # Пробуем получить информацию о чате
+                            chat = await app.bot.get_chat(first_msg.get('chat_id'))
+                            logger.info(f"Доступ к чату {chat.title if chat.title else chat.id} подтвержден")
+                        except Exception as e:
+                            logger.warning(f"Не удалось получить доступ к чату {first_msg.get('chat_id')}: {e}")
+                            logger.warning("Пост может не отправиться, если бот не имеет доступа к исходным сообщениям")
+                    
+                    trigger = DateTrigger(
+                        run_date=scheduled_datetime
+                    )
+                    
+                    scheduler.add_job(
+                        post_scheduler.send_scheduled_message,
+                        trigger=trigger,
+                        args=[GROUP_ID, post_data],
+                        id=f"post_{post_id}",
+                        replace_existing=True
+                    )
+                    restored_count += 1
+                    logger.info(f"Восстановлен пост {post_id} на {scheduled_datetime}")
+        except Exception as e:
+            logger.error(f"Ошибка восстановления поста {post_id}: {e}")
+    
+    logger.info(f"Восстановлено {restored_count} запланированных постов")
 # Создание экземпляра планировщика
 post_scheduler = PostScheduler()
 
